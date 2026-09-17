@@ -1,0 +1,161 @@
+version: '3.8'
+
+services:
+  controller:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.controller
+    container_name: cc-controller
+    dns: 
+      - 114.114.114.114
+      - 8.8.8.8
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./module1/controller.py:/app/controller.py
+      - ./module1/wizard_pipeline.py:/app/wizard_pipeline.py
+      - ./scripts:/app/scripts
+      - ./module3:/app/module3
+      # wizard 动态加载 integrated_client.py，其依赖 module1.client；须挂载整包
+      - ./module1:/app/module1
+      #- ./module2:/app/module2
+      - ./data:/data
+      - ./config/trusted_images.json:/etc/attestation/trusted_images.json
+      - ./logs/controller:/app/logs
+    environment:
+      - ATTESTATION_SERVER=http://attestation-service:8081
+      - LOG_LEVEL=INFO
+      # 向导访问动态训练容器：优先 DYNAMIC_CONTAINER_NETWORK 内网直连（容器名:端口），避免经宿主机映射+网关 RST
+      - DYNAMIC_CONTAINER_NETWORK=${DYNAMIC_CONTAINER_NETWORK:-cc-platform-net}
+      # 未设 DYNAMIC_CONTAINER_NETWORK 时：localhost -> HOST_GATEWAY_IP（老路径）
+      - HOST_GATEWAY_IP=${HOST_GATEWAY_IP:-172.17.0.1}
+      - DYNAMIC_CONTAINER_IDLE_TIMEOUT_SECONDS=${DYNAMIC_CONTAINER_IDLE_TIMEOUT_SECONDS:-600}
+      - DYNAMIC_CONTAINER_IDLE_MIN_LIFETIME_SECONDS=${DYNAMIC_CONTAINER_IDLE_MIN_LIFETIME_SECONDS:-60}
+      - DYNAMIC_CONTAINER_REAP_INTERVAL_SECONDS=${DYNAMIC_CONTAINER_REAP_INTERVAL_SECONDS:-30}
+      # 训练完成后保留动态容器，约 idle_timeout 秒无活动后由 controller 回收；设为 1 则训练结束立刻删
+      - WIZARD_DESTROY_CONTAINER_AFTER_TRAIN=${WIZARD_DESTROY_CONTAINER_AFTER_TRAIN:-0}
+      # 管理端容器详情「CSV 内存占比」曲线分母（MB）；不设则用该容器 Docker 内存上限
+      - CSV_PLATFORM_PROTECTED_MEMORY_MB=${CSV_PLATFORM_PROTECTED_MEMORY_MB:-}
+      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://root:mysql_root_pass@host.docker.internal:3306/security_audit?charset=utf8mb4}
+      - AUDIT_DEFAULT_ACCOUNT_ID=${AUDIT_DEFAULT_ACCOUNT_ID:-1}
+      # 审计验链：须与 attestation / training 相同，否则多容器各自随机密钥会导致 verify-chain 失败
+      - AUDIT_SM2_PRIVATE_KEY=${AUDIT_SM2_PRIVATE_KEY:-}
+      - AUDIT_SM2_PUBLIC_KEY=${AUDIT_SM2_PUBLIC_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - cc-network
+    restart: unless-stopped
+    healthcheck:
+      # 冷启动 / MySQL 就绪较慢时避免误判 unhealthy；localhost 在部分环境解析 IPv6 较慢，改用 127.0.0.1
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://127.0.0.1:8080/api/v1/containers', timeout=10).raise_for_status()"]
+      interval: 15s
+      timeout: 15s
+      retries: 5
+      start_period: 90s
+
+  attestation-service:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.attestation
+    container_name: cc-attestation
+    dns: 
+      - 114.114.114.114
+      - 8.8.8.8
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./module1:/app/module1
+      - ./module1/attestation_service.py:/app/attestation_service.py
+      - ./module3:/app/module3
+      - ./config/trusted_images.json:/etc/attestation/trusted_images.json
+      - ./logs/attestation:/app/logs
+    environment:
+      - LOG_LEVEL=INFO
+      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://root:mysql_root_pass@host.docker.internal:3306/security_audit?charset=utf8mb4}
+      - AUDIT_DEFAULT_ACCOUNT_ID=${AUDIT_DEFAULT_ACCOUNT_ID:-1}
+      - ALLOW_CSV_SIMULATION=${ALLOW_CSV_SIMULATION:-1}
+      - AUDIT_SM2_PRIVATE_KEY=${AUDIT_SM2_PRIVATE_KEY:-}
+      - AUDIT_SM2_PUBLIC_KEY=${AUDIT_SM2_PUBLIC_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - cc-network
+    restart: unless-stopped
+    depends_on:
+      controller:
+        condition: service_healthy
+
+  confidential-container:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: cc-training
+    dns: 
+      - 114.114.114.114
+      - 8.8.8.8
+    ports:
+      - "8000:8000"
+      - "8006:8006"
+    devices:
+      - "/dev/csv-guest:/dev/csv-guest:rwm"
+    privileged: true
+    volumes:
+      - ./data:/app/data
+      - ./logs/training:/app/logs
+      - ./module1:/app/module1
+      - ./module2:/app/module2
+      - ./module3:/app/module3
+    environment:
+      - ATTESTATION_SERVER=http://attestation-service:8081
+      - CONTAINER_MODE=csv
+      - LOG_LEVEL=INFO
+      - PYTHONPATH=/app
+      - CONTAINER_IMAGE_HASH=sha256:ec3bf8498c7f42029c381a15cf39e4a5e01d2231274c7570d6c53aef01e8a1ae
+      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://root:mysql_root_pass@host.docker.internal:3306/security_audit?charset=utf8mb4}
+      - AUDIT_DEFAULT_ACCOUNT_ID=${AUDIT_DEFAULT_ACCOUNT_ID:-1}
+      - ALLOW_CSV_SIMULATION=${ALLOW_CSV_SIMULATION:-1}
+      - AUDIT_SM2_PRIVATE_KEY=${AUDIT_SM2_PRIVATE_KEY:-}
+      - AUDIT_SM2_PUBLIC_KEY=${AUDIT_SM2_PUBLIC_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - cc-network
+    restart: unless-stopped
+    command: >
+      sh -c "
+      python3 /app/module1/attestation_agent.py &
+      uvicorn module2.main:app --host 0.0.0.0 --port 8000 --workers 1 &
+      wait
+      "
+    depends_on:
+      attestation-service:
+        condition: service_started
+
+  client:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.client
+    container_name: cc-client
+    volumes:
+      - ./module1:/app/module1
+      - ./scripts:/app/scripts
+      - ./data:/data
+      - ./logs/client:/app/logs
+    working_dir: /app
+    environment:
+      - CONTROLLER_URL=http://controller:8080
+      - VERIFY_URL=http://attestation-service:8081
+    networks:
+      - cc-network
+    restart: "no"
+    depends_on:
+      - controller
+      - attestation-service
+      - confidential-container
+
+networks:
+  cc-network:
+    name: cc-platform-net
+    driver: bridge

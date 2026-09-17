@@ -1,0 +1,15 @@
+FROM docker.m.daocloud.io/library/python:3.8-slim
+
+# 设置 pip 镜像源为阿里云
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/
+
+WORKDIR /app
+
+# 复制依赖文件并安装 Python 包
+COPY module1/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 复制客户端脚本
+COPY module1/client.py .
+
+CMD ["python", "client.py"]

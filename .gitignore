@@ -1,0 +1,36 @@
+# 环境与密钥
+.env
+.env.*
+!.env.example
+**/AUDIT_SM2*
+**/*secret*
+**/*credential*
+
+# 依赖与构建
+fronted/node_modules/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# 日志与本地数据/产物
+logs/
+*.log
+data/*.bin
+data/*.enc
+reports/
+*.enc
+
+# IDE / 系统
+.idea/
+.vscode/
+.cursor/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Docker 本地覆盖
+docker-compose.override.yml

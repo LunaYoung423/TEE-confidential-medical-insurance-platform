@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>信创密舱・TEE 可信计算平台 - 系统架构图</title>
+  <style>
+    :root {
+      --bg: #eef2f7;
+      --card: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --line: #cbd5e1;
+      --user: #e8f1fc;
+      --access: #fef9c3;
+      --control: #d1fae5;
+      --compute: #bae6fd;
+      --trust: #fbcfe8;
+      --infra: #ede9fe;
+      --audit: #bef264;
+      --security: #fca5a5;
+      --shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background: linear-gradient(165deg, #f1f5f9 0%, #e2e8f0 100%);
+      color: var(--text);
+      padding: 8px 10px;
+    }
+
+    .wrap {
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+
+    .title {
+      margin: 0 0 6px 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: #0f172a;
+    }
+
+    .diagram {
+      display: grid;
+      grid-template-columns: 76% 36px 36px;
+      gap: 0;
+      align-items: start;
+      max-width: 900px;
+      margin: 0 auto;
+      justify-content: center;
+    }
+
+    .main {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.07);
+      padding: 4px 6px;
+      width: 100%;
+    }
+
+    :root {
+      --layer-height: 86px;
+    }
+
+    .layer {
+      border: 1px dashed rgba(100, 116, 139, 0.55);
+      border-radius: 10px;
+      padding: 4px 6px;
+      margin-bottom: 3px;
+      height: 80px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      width: 100%;
+      margin-left: 0;
+      margin-right: 0;
+    }
+
+    .layer:last-child {
+      margin-bottom: 0;
+    }
+
+    .layer-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2px;
+      gap: 4px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+      padding-bottom: 2px;
+    }
+
+    .layer-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .layer-tag {
+      font-size: 10px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      align-content: center;
+      flex: 1;
+      gap: 4px;
+    }
+
+    .cards.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cards.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      width: 100%;
+      max-width: none;
+      padding: 5px 6px;
+      min-height: 0;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+    }
+
+    .card h4 {
+      margin: 0;
+      font-weight: 700;
+      color: #0f172a;
+      line-height: 1.2;
+    }
+
+    .cards.cols-2 .card {
+      padding: 6px 9px;
+    }
+
+    .cards.cols-2 .card h4 {
+      font-size: 15px;
+      color: #0c2744;
+    }
+
+    .cards.cols-4 .card {
+      padding: 5px 6px;
+    }
+
+    .cards.cols-4 .card h4 {
+      font-size: 12.5px;
+    }
+
+    .cards:not(.cols-2):not(.cols-4) .card h4 {
+      font-size: 13px;
+    }
+
+    /* 层间连接：单行、无块级箭头，避免上下大块留白 */
+    .flow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      margin: 0;
+      padding: 0 0 1px;
+      line-height: 1;
+      min-height: 0;
+      font-size: 10px;
+      font-weight: 600;
+      color: #5b6b80;
+      letter-spacing: 0.03em;
+    }
+
+    .flow .flow-arrow {
+      color: #94a3b8;
+      font-size: 11px;
+      line-height: 1;
+      font-weight: 400;
+      transform: translateY(0.5px);
+    }
+
+    .user    { background: var(--user); }
+    .access  { background: var(--access); }
+    .control { background: var(--control); }
+    .compute { background: var(--compute); }
+    .trust   { background: var(--trust); }
+    .infra   { background: var(--infra); }
+
+    .pillar {
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      letter-spacing: 1px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 12px;
+      padding: 4px 0;
+      min-height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .pillar.audit { background: var(--audit); color: #365314; }
+    .pillar.security {
+      background: var(--security);
+      color: #7f1d1d;
+      margin-left: 4px; /* 仅保留两条竖条之间的小间距 */
+    }
+
+    @media (max-width: 960px) {
+      .diagram { grid-template-columns: 1fr; }
+      .layer {
+        height: auto;
+        min-height: 72px;
+        width: 100%;
+      }
+      .pillar {
+        writing-mode: horizontal-tb;
+        min-height: auto;
+        padding: 8px;
+      }
+      .cards, .cards.cols-2, .cards.cols-4 {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1 class="title">信创密舱・TEE 可信计算平台 —— 3.1 系统架构图</h1>
+
+    <div class="diagram">
+      <section class="main">
+        <div class="layer user">
+          <div class="layer-head">
+            <div class="layer-title">① 用户接入层</div>
+            <span class="layer-tag">业务用户 · 管理员</span>
+          </div>
+          <div class="cards cols-2">
+            <div class="card">
+              <h4>医保协同业务用户</h4>
+            </div>
+            <div class="card">
+              <h4>平台管理员</h4>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow"><span class="flow-arrow" aria-hidden="true">↓</span>HTTPS / REST</div>
+
+        <div class="layer access">
+          <div class="layer-head">
+            <div class="layer-title">② 前端交互与接口接入层</div>
+            <span class="layer-tag">门户 · API</span>
+          </div>
+          <div class="cards cols-4">
+            <div class="card">
+              <h4>用户门户</h4>
+            </div>
+            <div class="card">
+              <h4>管理门户</h4>
+            </div>
+            <div class="card">
+              <h4>统一请求层</h4>
+            </div>
+            <div class="card">
+              <h4>路由与权限</h4>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow"><span class="flow-arrow" aria-hidden="true">↓</span>控制面</div>
+
+        <div class="layer control">
+          <div class="layer-head">
+            <div class="layer-title">③ 平台控制与编排层（模块一 + 模块三·调度）</div>
+            <span class="layer-tag">编排 · 调度</span>
+          </div>
+          <div class="cards">
+            <div class="card">
+              <h4>统一控制器</h4>
+            </div>
+            <div class="card">
+              <h4>任务编排引擎</h4>
+            </div>
+            <div class="card">
+              <h4>资源调度</h4>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow"><span class="flow-arrow" aria-hidden="true">↓</span>密态计算</div>
+
+        <div class="layer compute">
+          <div class="layer-head">
+            <div class="layer-title">④ 密态训练服务层（模块二）</div>
+            <span class="layer-tag">训练服务</span>
+          </div>
+          <div class="cards">
+            <div class="card">
+              <h4>训练任务</h4>
+            </div>
+            <div class="card">
+              <h4>加解密桥接</h4>
+            </div>
+            <div class="card">
+              <h4>算法执行</h4>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow"><span class="flow-arrow" aria-hidden="true">↓</span>可信链路</div>
+
+        <div class="layer trust">
+          <div class="layer-head">
+            <div class="layer-title">⑤ 可信与安全服务层（模块一·证明 + 模块三·审计）</div>
+            <span class="layer-tag">证明 · 国密 · 审计</span>
+          </div>
+          <div class="cards cols-4">
+            <div class="card">
+              <h4>证明代理</h4>
+            </div>
+            <div class="card">
+              <h4>验证服务</h4>
+            </div>
+            <div class="card">
+              <h4>国密能力</h4>
+            </div>
+            <div class="card">
+              <h4>审计链</h4>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow"><span class="flow-arrow" aria-hidden="true">↓</span>基础设施</div>
+
+        <div class="layer infra">
+          <div class="layer-head">
+            <div class="layer-title">⑥ 数据与基础设施层</div>
+            <span class="layer-tag">阿里云 · MySQL · TEE</span>
+          </div>
+          <div class="cards cols-4">
+            <div class="card">
+              <h4>容器编排</h4>
+            </div>
+            <div class="card">
+              <h4>MySQL 数据库</h4>
+            </div>
+            <div class="card">
+              <h4>海光 CSV<br />TEE 硬件</h4>
+            </div>
+            <div class="card">
+              <h4>阿里云 ECS<br />运行环境</h4>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="pillar audit">全流程审计与可追溯</aside>
+      <aside class="pillar security">数据安全与权限控制</aside>
+    </div>
+  </div>
+</body>
+</html>

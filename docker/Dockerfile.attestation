@@ -1,0 +1,47 @@
+FROM docker.m.daocloud.io/library/python:3.8-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 统一使用 bullseye，并清掉 sources.list.d（避免混入 bookworm）
+RUN rm -f /etc/apt/sources.list.d/* && \
+    echo "deb http://mirrors.aliyun.com/debian bullseye main" > /etc/apt/sources.list && \
+    echo "deb http://mirrors.aliyun.com/debian-security bullseye-security main" >> /etc/apt/sources.list && \
+    echo "deb http://mirrors.aliyun.com/debian bullseye-updates main" >> /etc/apt/sources.list
+
+RUN apt-get update --fix-missing -o Acquire::Retries=3 -o Acquire::http::Timeout=30 && \
+    apt-get install -y --no-install-recommends wget ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# 如果需要 gcc（用于编译某些 Python 包），取消注释下一行
+# RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
+
+# 设置 pip 镜像源为阿里云
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/
+
+WORKDIR /app
+
+# 复制依赖文件并安装 Python 包
+COPY module1/requirements.txt .
+COPY module3/requirements.txt /tmp/requirements-module3.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+ && pip install --no-cache-dir -r /tmp/requirements-module3.txt
+RUN wget -qO /tmp/csv-req.txt https://enclave-cn-hangzhou.oss-cn-hangzhou.aliyuncs.com/csv/requirements.txt \
+    && pip install --no-cache-dir -r /tmp/csv-req.txt
+RUN pip install --no-cache-dir smx
+RUN pip install --no-cache-dir --force-reinstall snowland_smx==0.3.1 \
+    && python3 -c "from pysmx.SM3 import digest; from pysmx.SM2 import Verify; print('snowland_smx wheel -> pysmx OK')"
+
+# 镜像内只读副本：避免 bind-mount 权限/可执行位导致 verify 子进程 Permission denied
+RUN mkdir -p /app/_embedded
+COPY module1/csv-attestation.py /app/_embedded/csv_attestation_tool.py
+RUN chmod 644 /app/_embedded/csv_attestation_tool.py
+
+COPY module1/attestation_service.py .
+COPY module1/csv-attestation.py /app/csv-attestation.py
+RUN chmod 644 /app/csv-attestation.py
+COPY module3 /app/module3
+
+ENV PYTHONPATH=/app
+
+EXPOSE 8081
+CMD ["python", "attestation_service.py"]

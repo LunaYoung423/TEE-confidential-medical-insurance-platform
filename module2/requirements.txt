@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+scikit-learn
+# xgboost>=2.1 在 Linux 上会依赖 nvidia-nccl-cu12（数百 MB，易因镜像/网络超时失败）；训练容器仅需 CPU
+xgboost==1.7.6
+pandas
+numpy
+gmssl
+pysmx

@@ -1,0 +1,5 @@
+sudo tee /etc/docker/daemon.json <<-'EOF'
+{
+  "dns": ["114.114.114.114", "8.8.8.8"]
+}
+EOF

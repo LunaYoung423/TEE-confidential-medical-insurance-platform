@@ -1,0 +1,23 @@
+FROM docker.m.daocloud.io/library/python:3.8-slim
+
+# 设置 pip 镜像源为阿里云
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/
+
+WORKDIR /app
+# controller.py 位于 /app；module3 位于 /app/module3
+
+# 复制依赖文件并安装 Python 包（确保包含 requests）
+COPY module1/requirements.txt .
+COPY module3/requirements.txt /tmp/requirements-module3.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+ && pip install --no-cache-dir -r /tmp/requirements-module3.txt
+
+# 复制控制器脚本与模块三
+COPY module1/controller.py .
+COPY module1/wizard_pipeline.py ./wizard_pipeline.py
+COPY module3 /app/module3
+
+ENV PYTHONPATH=/app
+
+EXPOSE 8080
+CMD ["python", "controller.py"]
